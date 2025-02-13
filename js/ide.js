@@ -665,13 +665,21 @@ $(document).ready(async function () {
 
     //CREATED AI CHAT INTERFACE BY REGISTERING COMPONENT
     layout.registerComponent("ai-assistant", function (container, state) {
-      let chatContainer = $('<div id="ai-chat-container"></div>');
-      let chatMessages = $('<div id="ai-chat-messages"></div>');
-      let chatInputContainer = $('<div id="ai-chat-input-container"></div>');
-      let chatInput = $(
-        '<input id="ai-chat-input" type="text" placeholder="Ask AI..." />'
+      let chatContainer = $(
+        '<div id="ai-chat-container" class="flex flex-col h-full bg-gray-900 text-white"></div>'
       );
-      let sendButton = $('<button id="ai-send-btn">Send</button>');
+      let chatMessages = $(
+        '<div id="ai-chat-messages" class="flex flex-col flex-grow space-y-2 p-4 overflow-y-auto"></div>'
+      );
+      let chatInputContainer = $(
+        '<div id="ai-chat-input-container" class="p-4 border-t border-gray-700 flex"></div>'
+      );
+      let chatInput = $(
+        '<input id="ai-chat-input" type="text" placeholder="Ask AI..." class="flex-grow p-2 bg-gray-800 text-white border border-gray-600 rounded-lg outline-none" />'
+      );
+      let sendButton = $(
+        '<button id="ai-send-btn" class="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Send</button>'
+      );
 
       chatInputContainer.append(chatInput, sendButton);
       chatContainer.append(chatMessages, chatInputContainer);
@@ -978,28 +986,33 @@ async function sendMessageToAI() {
   // Add user message to chat history
   chatHistory.push({ role: "user", parts: [{ text: fullMessage }] });
 
-  chatMessages.append(
-    `<div style="margin-bottom: 10px;"><strong>You:</strong> ${userMessage}</div>`
-  );
+  // Append user message (right-aligned blue bubble)
+  chatMessages.append(`
+      <div class="flex justify-end">
+          <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
+              <strong>You:</strong> ${userMessage}
+          </div>
+      </div>
+  `);
   chatInput.val("");
 
   try {
+    console.log("🔹 Sending request to Gemini API...");
+
     let response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_instruction: {
             parts: [
               {
-                text: "You are an expert coding teacher. You provide step-by-step explanations and help users improve their programming skills.",
+                text: "You are an expert coding teacher. You provide step-by-step explanations and help users improve their programming skills. Always answer the question in steps and provide any code if necessary at the end.",
               },
             ],
           },
-          contents: chatHistory, // Send full conversation history for context
+          contents: chatHistory,
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 500,
@@ -1015,14 +1028,24 @@ async function sendMessageToAI() {
     // Add AI response to chat history
     chatHistory.push({ role: "model", parts: [{ text: aiReply }] });
 
-    chatMessages.append(
-      `<div style="margin-bottom: 10px; color: blue;"><strong>AI:</strong> ${aiReply}</div>`
-    );
+    // Append AI message (left-aligned gray bubble)
+    chatMessages.append(`
+          <div class="flex justify-start">
+              <div class="bg-gray-700 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
+                  <strong>AI:</strong> ${aiReply}
+              </div>
+          </div>
+      `);
+
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
-    console.error("Error fetching AI response:", error);
-    chatMessages.append(
-      `<div style="color: red;"><strong>Error:</strong> Failed to get AI response.</div>`
-    );
+    console.error("❌ Error fetching AI response:", error);
+    chatMessages.append(`
+          <div class="flex justify-start">
+              <div class="bg-red-500 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
+                  <strong>Error:</strong> Failed to get AI response.
+              </div>
+          </div>
+      `);
   }
 }
