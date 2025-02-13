@@ -2,8 +2,6 @@ import { IS_PUTER } from "./puter.js";
 import { toggleThemeMode } from "./ui.js";
 
 const API_KEY = ""; // Get yours at https://platform.sulu.sh/apis/judge0
-const GEMINI_API_KEY = "AIzaSyDRLf-Fu1udCa0lx0DllKTEmW0a9HaEv58";
-let chatHistory = []; // Stores conversation history
 
 const AUTH_HEADERS = API_KEY
   ? {
@@ -1018,17 +1016,35 @@ function getLanguageForExtension(extension) {
 
 //REST API CALL TO GEMINI API
 async function sendMessageToAI() {
+  let apiKey = localStorage.getItem("openrouter_api_key");
+  if (!apiKey) {
+    alert("Please enter your OpenRouter API key in the settings panel.");
+    return;
+  }
+
   let chatInput = $("#ai-chat-input");
   let chatMessages = $("#ai-chat-messages");
 
   let userMessage = chatInput.val().trim();
   if (!userMessage) return;
 
-  let code = sourceEditor.getValue(); // Get current code from the editor
-  let fullMessage = `Here is the user's code:\n\n${code}\n\nQuestion: ${userMessage}`;
+  let sourceCode = sourceEditor.getValue().trim() || "No source code provided.";
+  let stdin = stdinEditor.getValue().trim() || "No standard input provided.";
+  let stdout =
+    stdoutEditor.getValue().trim() || "No standard output available.";
+  let selectedLanguage =
+    $("#select-language").find(":selected").text() || "Unknown";
 
-  // Add user message to chat history
-  chatHistory.push({ role: "user", parts: [{ text: fullMessage }] });
+  // Construct system message with structured code context
+  let systemMessage = `
+  You are an expert programming assistant with access to the following context:
+  - **Source Code:**\n\`\`\`\n${sourceCode}\n\`\`\`
+  - **Standard Input (stdin):**\n\`\`\`\n${stdin}\n\`\`\`
+  - **Standard Output (stdout):**\n\`\`\`\n${stdout}\n\`\`\`
+  - **Programming Language:** ${selectedLanguage}
+
+  Use this information to assist the user. Provide structured responses with clear explanations and code examples when necessary.
+  `;
 
   // Append user message (right-aligned blue bubble)
   chatMessages.append(`
@@ -1038,39 +1054,34 @@ async function sendMessageToAI() {
           </div>
       </div>
   `);
-  chatInput.val("");
+  chatInput.val(""); // Clear input field
 
   try {
-    console.log("🔹 Sending request to Gemini API...");
+    console.log("🔹 Sending request to OpenRouter API...");
 
     let response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.origin, // Optional
+          "X-Title": "AI Code Editor", // Optional
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          system_instruction: {
-            parts: [
-              {
-                text: "You are an expert coding teacher. You provide step-by-step explanations and help users improve their programming skills. Always answer the question in steps and provide any code if necessary at the end.",
-              },
-            ],
-          },
-          contents: chatHistory,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 500,
-          },
+          model: "google/gemini-flash-1.5",
+          messages: [
+            { role: "system", content: systemMessage },
+            { role: "user", content: userMessage },
+          ],
         }),
       }
     );
 
     let data = await response.json();
-    let aiReply =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI.";
-
-    // Add AI response to chat history
-    chatHistory.push({ role: "model", parts: [{ text: aiReply }] });
+    console.log("🔹 Response from OpenRouter API:", data);
+    let aiReply = data.choices[0].message.content || "No response from AI.";
 
     // Append AI message (left-aligned gray bubble)
     chatMessages.append(`
@@ -1080,7 +1091,6 @@ async function sendMessageToAI() {
               </div>
           </div>
       `);
-
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
     console.error("❌ Error fetching AI response:", error);
