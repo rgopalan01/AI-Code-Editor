@@ -668,6 +668,24 @@ $(document).ready(async function () {
       let chatContainer = $(
         '<div id="ai-chat-container" class="flex flex-col h-full bg-gray-900 text-white"></div>'
       );
+      let settingsButton = $(
+        '<button id="toggle-api-settings" class="self-end text-gray-400 hover:text-white text-sm p-2">⚙️ Settings</button>'
+      );
+      let apiSettings = $(
+        '<div id="api-settings" class="hidden flex flex-col space-y-2 p-2 bg-gray-800 rounded-lg"></div>'
+      );
+      let apiLabel = $(
+        '<label for="api-key-input" class="text-xs text-gray-400">OpenRouter API Key:</label>'
+      );
+      let apiInput = $(
+        '<input id="api-key-input" type="text" placeholder="sk-..." class="p-2 bg-gray-700 text-white border border-gray-600 rounded-lg w-full text-sm" />'
+      );
+      let saveButton = $(
+        '<button id="save-api-key-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs">Save API Key</button>'
+      );
+      let statusMessage = $(
+        '<p id="api-key-status" class="text-xs text-green-400 hidden">✅ API Key Saved!</p>'
+      );
       let chatMessages = $(
         '<div id="ai-chat-messages" class="flex flex-col flex-grow space-y-2 p-4 overflow-y-auto"></div>'
       );
@@ -681,15 +699,41 @@ $(document).ready(async function () {
         '<button id="ai-send-btn" class="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Send</button>'
       );
 
+      // Append API settings elements
+      apiSettings.append(apiLabel, apiInput, saveButton, statusMessage);
+
+      // Append elements to chat UI
+      chatContainer.append(
+        settingsButton,
+        apiSettings,
+        chatMessages,
+        chatInputContainer
+      );
       chatInputContainer.append(chatInput, sendButton);
-      chatContainer.append(chatMessages, chatInputContainer);
       container.getElement().append(chatContainer);
 
-      sendButton.click(function () {
-        sendMessageToAI();
+      // Toggle API Key settings visibility
+      settingsButton.click(() => apiSettings.toggleClass("hidden"));
+
+      // Load saved API key from local storage
+      let storedApiKey = localStorage.getItem("openrouter_api_key");
+      if (storedApiKey) {
+        apiInput.val(storedApiKey);
+      }
+
+      // Save API key when button is clicked
+      saveButton.click(function () {
+        let apiKey = apiInput.val().trim();
+        if (apiKey) {
+          localStorage.setItem("openrouter_api_key", apiKey);
+          statusMessage.removeClass("hidden").text("✅ API Key Saved!");
+          setTimeout(() => statusMessage.addClass("hidden"), 2000);
+        }
       });
 
-      chatInput.keypress(function (event) {
+      // Send button functionality
+      sendButton.click(() => sendMessageToAI());
+      chatInput.keypress((event) => {
         if (event.which === 13) {
           sendMessageToAI();
         }
