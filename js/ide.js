@@ -1014,7 +1014,21 @@ function getLanguageForExtension(extension) {
   return EXTENSIONS_TABLE[extension] || { flavor: CE, language_id: 43 }; // Plain Text (https://ce.judge0.com/languages/43)
 }
 
-//REST API CALL TO GEMINI API
+function formatAIResponse(text) {
+  // Convert line breaks into HTML-friendly formatting
+  let formattedText = text
+    .replace(/\n\n/g, "<br><br>") // Convert double newlines to paragraph breaks
+    .replace(/\n/g, "<br>") // Convert single newlines to line breaks
+    .replace(
+      /```([\s\S]*?)```/g,
+      '<pre class="bg-gray-900 text-white p-2 rounded-lg shadow-md overflow-x-auto"><code>$1</code></pre>'
+    ) // Format code blocks with Tailwind classes
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") // Bold text
+    .replace(/\*(.*?)\*/g, "<em>$1</em>"); // Italic text
+
+  return formattedText;
+}
+
 async function sendMessageToAI() {
   let apiKey = localStorage.getItem("openrouter_api_key");
   if (!apiKey) {
@@ -1035,38 +1049,34 @@ async function sendMessageToAI() {
   let selectedLanguage =
     $("#select-language").find(":selected").text() || "Unknown";
 
-  // Construct system message with structured code context
   let systemMessage = `
-  You are an expert programming assistant with access to the following context:
-  - **Source Code:**\n\`\`\`\n${sourceCode}\n\`\`\`
-  - **Standard Input (stdin):**\n\`\`\`\n${stdin}\n\`\`\`
-  - **Standard Output (stdout):**\n\`\`\`\n${stdout}\n\`\`\`
-  - **Programming Language:** ${selectedLanguage}
+    You are an expert programming assistant with access to the following context:
+    - **Source Code:**\n\`\`\`\n${sourceCode}\n\`\`\`
+    - **Standard Input (stdin):**\n\`\`\`\n${stdin}\n\`\`\`
+    - **Standard Output (stdout):**\n\`\`\`\n${stdout}\n\`\`\`
+    - **Programming Language:** ${selectedLanguage}
+    
+    Use this information to assist the user. Provide structured responses with clear explanations and code examples when necessary.
+    `;
 
-  Use this information to assist the user. Provide structured responses with clear explanations and code examples when necessary.
-  `;
-
-  // Append user message (right-aligned blue bubble)
-  chatMessages.append(`
-      <div class="flex justify-end">
+  chatMessages.append(
+    `<div class="flex justify-end">
           <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
               <strong>You:</strong> ${userMessage}
           </div>
-      </div>
-  `);
-  chatInput.val(""); // Clear input field
+      </div>`
+  );
+  chatInput.val("");
 
   try {
-    console.log("🔹 Sending request to OpenRouter API...");
-
     let response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": window.location.origin, // Optional
-          "X-Title": "AI Code Editor", // Optional
+          "HTTP-Referer": window.location.origin,
+          "X-Title": "AI Code Editor",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -1080,26 +1090,27 @@ async function sendMessageToAI() {
     );
 
     let data = await response.json();
-    console.log("🔹 Response from OpenRouter API:", data);
-    let aiReply = data.choices[0].message.content || "No response from AI.";
+    let aiReply = data.choices?.[0]?.message?.content || "No response from AI.";
 
-    // Append AI message (left-aligned gray bubble)
-    chatMessages.append(`
-          <div class="flex justify-start">
-              <div class="bg-gray-700 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
-                  <strong>AI:</strong> ${aiReply}
+    // **Format the AI response for better readability**
+    let formattedReply = formatAIResponse(aiReply);
+
+    chatMessages.append(
+      `<div class="flex justify-start">
+              <div class="bg-gray-700 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md overflow-hidden">
+                  <strong>AI:</strong> ${formattedReply}
               </div>
-          </div>
-      `);
+          </div>`
+    );
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
     console.error("❌ Error fetching AI response:", error);
-    chatMessages.append(`
-          <div class="flex justify-start">
+    chatMessages.append(
+      `<div class="flex justify-start">
               <div class="bg-red-500 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
                   <strong>Error:</strong> Failed to get AI response.
               </div>
-          </div>
-      `);
+          </div>`
+    );
   }
 }
