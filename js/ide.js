@@ -62,7 +62,7 @@ var layoutConfig = {
       content: [
         {
           type: "component",
-          width: 70, // Main column for the Source Code
+          width: 50, // Adjusted width for Source Code Editor
           componentName: "source",
           id: "source",
           title: "Source Code",
@@ -71,10 +71,10 @@ var layoutConfig = {
         },
         {
           type: "column",
-          width: 30, // Column for AI Assistant, Input, and Output
+          width: 20, // Column for Input and Output (Stacked)
           content: [
             {
-              type: "stack", // Stack for Input and Output as tabs
+              type: "stack",
               content: [
                 {
                   type: "component",
@@ -94,15 +94,16 @@ var layoutConfig = {
                 },
               ],
             },
-            {
-              type: "component",
-              componentName: "ai-assistant",
-              id: "ai-assistant",
-              title: "AI Assistant",
-              isClosable: true,
-              componentState: { readOnly: true },
-            },
           ],
+        },
+        {
+          type: "component",
+          width: 30, // Dedicated column for AI Assistant
+          componentName: "ai-assistant",
+          id: "ai-assistant",
+          title: "AI Assistant",
+          isClosable: true,
+          componentState: { readOnly: true },
         },
       ],
     },
