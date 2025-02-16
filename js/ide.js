@@ -1011,107 +1011,171 @@ const EXTENSIONS_TABLE = {
   txt: { flavor: CE, language_id: 43 }, // Plain Text
 };
 
-function getLanguageForExtension(extension) {
-  return EXTENSIONS_TABLE[extension] || { flavor: CE, language_id: 43 }; // Plain Text (https://ce.judge0.com/languages/43)
-}
-
-function formatAIResponse(text) {
-  // Convert line breaks into HTML-friendly formatting
-  let formattedText = text
-    .replace(/\n\n/g, "<br><br>") // Convert double newlines to paragraph breaks
-    .replace(/\n/g, "<br>") // Convert single newlines to line breaks
-    .replace(
-      /```([\s\S]*?)```/g,
-      '<pre class="bg-gray-900 text-white p-2 rounded-lg shadow-md overflow-x-auto"><code>$1</code></pre>'
-    ) // Format code blocks with Tailwind classes
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") // Bold text
-    .replace(/\*(.*?)\*/g, "<em>$1</em>"); // Italic text
-
-  return formattedText;
-}
-
 async function sendMessageToAI() {
-  let apiKey = localStorage.getItem("openrouter_api_key");
-  if (!apiKey) {
-    alert("Please enter your OpenRouter API key in the settings panel.");
-    return;
-  }
-
-  let chatInput = $("#ai-chat-input");
-  let chatMessages = $("#ai-chat-messages");
-
-  let userMessage = chatInput.val().trim();
-  if (!userMessage) return;
-
-  let sourceCode = sourceEditor.getValue().trim() || "No source code provided.";
-  let stdin = stdinEditor.getValue().trim() || "No standard input provided.";
-  let stdout =
-    stdoutEditor.getValue().trim() || "No standard output available.";
-  let selectedLanguage =
-    $("#select-language").find(":selected").text() || "Unknown";
-
-  let systemMessage = `
-    You are an expert programming assistant with access to the following context:
-    - **Source Code:**\n\`\`\`\n${sourceCode}\n\`\`\`
-    - **Standard Input (stdin):**\n\`\`\`\n${stdin}\n\`\`\`
-    - **Standard Output (stdout):**\n\`\`\`\n${stdout}\n\`\`\`
-    - **Programming Language:** ${selectedLanguage}
-    
-    Use this information to assist the user. Provide structured responses with clear explanations and code examples when necessary.
-    `;
-
-  chatMessages.append(
-    `<div class="flex justify-end">
-          <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
-              <strong>You:</strong> ${userMessage}
-          </div>
-      </div>`
-  );
-  chatInput.val("");
-
   try {
-    let response = await fetch(
+    const apiKey = localStorage.getItem("openrouter_api_key");
+    if (!apiKey) {
+      alert("Please enter your OpenRouter API key in the settings panel.");
+      return;
+    }
+
+    const chatInput = $("#ai-chat-input");
+    const chatMessages = $("#ai-chat-messages");
+    const userMessage = chatInput.val().trim();
+    if (!userMessage) return;
+
+    // Get context values
+    const sourceCode =
+      sourceEditor.getValue().trim() || "No source code provided.";
+    const stdin =
+      stdinEditor.getValue().trim() || "No standard input provided.";
+    const stdout =
+      stdoutEditor.getValue().trim() || "No standard output available.";
+    const selectedLanguage =
+      $("#select-language").find(":selected").text() || "Unknown";
+
+    // Your exact system message
+    const systemMessage = `
+You are an expert programming assistant with access to the following context.
+
+Context:
+- **Source Code:**\n\`\`\`\n${sourceCode}\n\`\`\`
+- **Standard Input (stdin):**\n\`\`\`\n${stdin}\n\`\`\`
+- **Standard Output (stdout):**\n\`\`\`\n${stdout}\n\`\`\`
+- **Programming Language:** ${selectedLanguage}
+
+Provide a step-by-step, concise, clear answer to the user's question and relevant code when necessary`;
+
+    // Add user message to chat
+    chatMessages.append(`
+      <div class="flex justify-end mb-2">
+        <div class="bg-blue-500 text-white p-3 rounded-lg max-w-md">
+          <strong>You:</strong> ${userMessage}
+        </div>
+      </div>
+    `);
+    chatInput.val("");
+
+    // Your exact request body structure
+    const requestBody = {
+      model: "google/gemini-flash-1.5",
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: userMessage },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "code_assistant",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              explanation: { type: "string", description: "Text explanation" },
+              code_blocks: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    language: {
+                      type: "string",
+                      description: "Programming language",
+                    },
+                    content: { type: "string", description: "Code snippet" },
+                  },
+                  required: ["language", "content"],
+                },
+              },
+            },
+            required: ["explanation"],
+            additionalProperties: false,
+          },
+        },
+      },
+    };
+
+    console.log("Sending request body:", JSON.stringify(requestBody, null, 2));
+
+    const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
           "HTTP-Referer": window.location.origin,
           "X-Title": "AI Code Editor",
-          "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: "google/gemini-flash-1.5",
-          messages: [
-            { role: "system", content: systemMessage },
-            { role: "user", content: userMessage },
-          ],
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
-    let data = await response.json();
-    let aiReply = data.choices?.[0]?.message?.content || "No response from AI.";
+    const responseData = await response.json();
+    console.log("Raw API response:", responseData);
 
-    // **Format the AI response for better readability**
-    let formattedReply = formatAIResponse(aiReply);
+    if (!response.ok) {
+      throw new Error(
+        responseData.error?.message || `HTTP error! status: ${response.status}`
+      );
+    }
 
-    chatMessages.append(
-      `<div class="flex justify-start">
-              <div class="bg-gray-700 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md overflow-hidden">
-                  <strong>AI:</strong> ${formattedReply}
-              </div>
-          </div>`
-    );
+    const aiReply = responseData.choices[0].message.content;
+    console.log("AI Reply:", aiReply);
+
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(aiReply);
+      console.log("Parsed JSON Response:", parsedResponse);
+    } catch (e) {
+      throw new Error(
+        `Failed to parse JSON response: ${e.message}\nResponse: ${aiReply}`
+      );
+    }
+
+    // Format explanation with HTML
+    const explanation = parsedResponse.explanation
+      .replace(/\n/g, "<br>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>");
+
+    // Build AI message
+    const aiMessage = $(`
+      <div class="flex justify-start mb-2">
+        <div class="bg-gray-700 text-white p-3 rounded-lg max-w-md w-full">
+          <div class="text-blue-400 font-bold mb-2"> <strong>AI Assistant:</strong></div>
+          <div class="explanation">${explanation}</div>
+        </div>
+      </div>
+    `);
+
+    // Add code blocks if present
+    if (parsedResponse.code_blocks?.length) {
+      parsedResponse.code_blocks.forEach((block, index) => {
+        aiMessage.find(".explanation").append(`
+          <div class="mt-3">
+            <div class="text-sm text-gray-300">${
+              block.language || "Code"
+            } Example:</div>
+            <div class="bg-gray-800 p-2 rounded-md mt-1">
+              <pre class="whitespace-pre-wrap break-words">${
+                block.content
+              }</pre>
+            </div>
+          </div>
+        `);
+      });
+    }
+
+    chatMessages.append(aiMessage);
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
-    console.error("❌ Error fetching AI response:", error);
-    chatMessages.append(
-      `<div class="flex justify-start">
-              <div class="bg-red-500 text-white p-3 rounded-lg max-w-xs md:max-w-md shadow-md">
-                  <strong>Error:</strong> Failed to get AI response.
-              </div>
-          </div>`
-    );
+    console.error("Error:", error);
+    $("#ai-chat-messages").append(`
+      <div class="flex justify-start mb-2">
+        <div class="bg-red-500 text-white p-3 rounded-lg max-w-md">
+          <strong>Error:</strong> ${error.message}
+        </div>
+      </div>
+    `);
   }
 }
