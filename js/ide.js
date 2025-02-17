@@ -1011,7 +1011,6 @@ const EXTENSIONS_TABLE = {
   txt: { flavor: CE, language_id: 43 }, // Plain Text
 };
 
-// ...
 async function sendMessageToAI() {
   try {
     const apiKey = localStorage.getItem("openrouter_api_key");
@@ -1025,14 +1024,12 @@ async function sendMessageToAI() {
     const userMessage = chatInput.val().trim();
     if (!userMessage) return;
 
-    // Use the user’s main editor as the 'original' code reference
+    // The user's current code to treat as 'original'
     const userOriginalCode = sourceEditor.getValue() || "";
 
-    // (Optional) gather other context, e.g. stdin, stdout, etc.
-    const stdin =
-      stdinEditor.getValue().trim() || "No standard input provided.";
-    const stdout =
-      stdoutEditor.getValue().trim() || "No standard output available.";
+    // Other context you might send...
+    const stdin = stdinEditor.getValue().trim() || "No stdin provided.";
+    const stdout = stdoutEditor.getValue().trim() || "No stdout available.";
     const selectedLanguage =
       $("#select-language").find(":selected").text() || "Unknown";
 
@@ -1057,7 +1054,7 @@ ${stdout}
 Provide a step-by-step, concise, clear answer to the user's question and relevant code when necessary
     `;
 
-    // Add user message to chat
+    // Display user's message in UI
     chatMessages.append(`
       <div class="flex justify-end mb-2">
         <div class="bg-blue-500 text-white p-3 rounded-lg max-w-md">
@@ -1067,6 +1064,7 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
     `);
     chatInput.val("");
 
+    // Build request
     const requestBody = {
       model: "google/gemini-flash-1.5",
       messages: [
@@ -1133,7 +1131,7 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
       );
     }
 
-    // Format explanation
+    // Format the explanation text
     const explanationHtml = parsedResponse.explanation
       .replace(/\n/g, "<br>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
@@ -1153,7 +1151,7 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
       </div>
     `);
 
-    // For each code block, create a Diff Editor inline
+    // Create a Diff Editor for each code block, plus “Apply” and “Revert” buttons
     if (Array.isArray(parsedResponse.code_blocks)) {
       parsedResponse.code_blocks.forEach((block) => {
         const codeBlockContainer = $(`
@@ -1161,16 +1159,27 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
             <div class="text-sm text-gray-300 mb-1">
               <strong>${block.language || "Code"} Diff:</strong>
             </div>
+            <!-- Editor container -->
             <div class="code-block-content" style="height: 300px;"></div>
           </div>
         `);
 
         aiMessage.find(".explanation").append(codeBlockContainer);
 
-        // Convert from AI’s language to Monaco’s known language ID
+        // Create a small button row
+        const buttonContainer = $(`
+          <div class="flex space-x-2 justify-end mt-2">
+            <button class="applyCodeBtn bg-green-500 text-white px-3 py-1 rounded">Apply</button>
+            <button class="revertCodeBtn bg-red-500 text-white px-3 py-1 rounded">Revert</button>
+          </div>
+        `);
+
+        codeBlockContainer.append(buttonContainer);
+
+        // Convert AI's language to Monaco's alias
         const monacoLanguage = getEditorLanguageMode(block.language);
 
-        // Create models
+        // Create the two models
         const originalModel = monaco.editor.createModel(
           userOriginalCode,
           monacoLanguage
@@ -1180,10 +1189,10 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
           monacoLanguage
         );
 
-        // Create a Diff Editor in “inline” mode
+        // Create Diff Editor in inline mode
         const diffContainer = codeBlockContainer.find(".code-block-content")[0];
         const diffEditor = monaco.editor.createDiffEditor(diffContainer, {
-          renderSideBySide: false, // <— inline diffs
+          renderSideBySide: false, // inline diffs
           readOnly: false,
           automaticLayout: true,
           minimap: { enabled: false },
@@ -1194,9 +1203,20 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
           original: originalModel,
           modified: modifiedModel,
         });
+
+        // APPLY => replace main editor with modified
+        buttonContainer.find(".applyCodeBtn").click(() => {
+          sourceEditor.setValue(modifiedModel.getValue());
+        });
+
+        // REVERT => revert main editor to original
+        buttonContainer.find(".revertCodeBtn").click(() => {
+          sourceEditor.setValue(originalModel.getValue());
+        });
       });
     }
 
+    // Append final message
     chatMessages.append(aiMessage);
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
