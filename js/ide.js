@@ -1164,17 +1164,22 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
           </div>
         `);
 
-        aiMessage.find(".explanation").append(codeBlockContainer);
-
         // Create a small button row
+        // Use mr-3 on the first button to create spacing between Apply and Revert
         const buttonContainer = $(`
-          <div class="flex space-x-2 justify-end mt-2">
-            <button class="applyCodeBtn bg-green-500 text-white px-3 py-1 rounded">Apply</button>
-            <button class="revertCodeBtn bg-red-500 text-white px-3 py-1 rounded">Revert</button>
+          <div class="flex justify-end mt-2 mb-2">
+            <button class="applyCodeBtn px-4 py-2 text-white bg-green-500 rounded-md text-sm font-medium transition-colors hover:bg-green-600 active:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 mr-2">
+              Apply
+            </button>
+            <button class="revertCodeBtn px-4 py-2 text-white bg-red-500 rounded-md text-sm font-medium transition-colors hover:bg-red-600 active:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+              Revert
+            </button>
           </div>
         `);
 
+        // Append editor + buttons to the container
         codeBlockContainer.append(buttonContainer);
+        aiMessage.find(".explanation").append(codeBlockContainer);
 
         // Convert AI's language to Monaco's alias
         const monacoLanguage = getEditorLanguageMode(block.language);
