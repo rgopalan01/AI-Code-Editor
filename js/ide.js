@@ -1051,25 +1051,25 @@ async function sendMessageToAI() {
       $("#select-language").find(":selected").text() || "Unknown";
 
     const systemMessage = `
-You are an expert programming assistant with access to the following context.
+      You are an expert programming assistant with access to the following context.
 
-Context:
-- **Source Code:**
-\`\`\`
-${userOriginalCode}
-\`\`\`
-- **Standard Input (stdin):**
-\`\`\`
-${stdin}
-\`\`\`
-- **Standard Output (stdout):**
-\`\`\`
-${stdout}
-\`\`\`
-- **Programming Language:** ${selectedLanguage}
+      Context:
+      - **Source Code:**
+      \\\
+      ${userOriginalCode}
+      \\\
+      - **Standard Input (stdin):**
+      \\\
+      ${stdin}
+      \\\
+      - **Standard Output (stdout):**
+      \\\
+      ${stdout}
+      \\\
+      - **Programming Language:** ${selectedLanguage}
 
-Provide a step-by-step, concise, clear answer to the user's question and the relevant, complete, new code if necessary.  
-    `;
+      Provide a step-by-step, concise, clear answer to the user's question and the relevant, complete, new code if necessary. 
+      `;
 
     // Display user's message in UI
     chatMessages.append(`
@@ -1186,7 +1186,7 @@ Provide a step-by-step, concise, clear answer to the user's question and the rel
         const codeBlockContainer = $(`
           <div class="mt-3 bg-gray-800 p-2 rounded-md">
             <div class="text-sm text-gray-300 mb-1">
-              <strong>${block.language || "Code"} Diff:</strong>
+              <strong>${block.language || "Code"}</strong>
             </div>
             <!-- Editor container -->
             <div class="code-block-content" style="height: 300px;"></div>
