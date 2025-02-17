@@ -1011,6 +1011,7 @@ const EXTENSIONS_TABLE = {
   txt: { flavor: CE, language_id: 43 }, // Plain Text
 };
 
+// ...
 async function sendMessageToAI() {
   try {
     const apiKey = localStorage.getItem("openrouter_api_key");
@@ -1024,9 +1025,10 @@ async function sendMessageToAI() {
     const userMessage = chatInput.val().trim();
     if (!userMessage) return;
 
-    // Context: source code, stdin, stdout, etc.
-    const sourceCode =
-      sourceEditor.getValue().trim() || "No source code provided.";
+    // Use the user’s main editor as the 'original' code reference
+    const userOriginalCode = sourceEditor.getValue() || "";
+
+    // (Optional) gather other context, e.g. stdin, stdout, etc.
     const stdin =
       stdinEditor.getValue().trim() || "No standard input provided.";
     const stdout =
@@ -1040,7 +1042,7 @@ You are an expert programming assistant with access to the following context.
 Context:
 - **Source Code:**
 \`\`\`
-${sourceCode}
+${userOriginalCode}
 \`\`\`
 - **Standard Input (stdin):**
 \`\`\`
@@ -1079,20 +1081,14 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
           schema: {
             type: "object",
             properties: {
-              explanation: { type: "string", description: "Text explanation" },
+              explanation: { type: "string" },
               code_blocks: {
                 type: "array",
                 items: {
                   type: "object",
                   properties: {
-                    language: {
-                      type: "string",
-                      description: "Programming language",
-                    },
-                    content: {
-                      type: "string",
-                      description: "Code snippet",
-                    },
+                    language: { type: "string" },
+                    content: { type: "string" },
                   },
                   required: ["language", "content"],
                 },
@@ -1105,6 +1101,7 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
       },
     };
 
+    // Send request
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -1136,12 +1133,13 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
       );
     }
 
-    // Build the AI message container
+    // Format explanation
     const explanationHtml = parsedResponse.explanation
       .replace(/\n/g, "<br>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>");
 
+    // Build the AI container
     const aiMessage = $(`
       <div class="flex justify-start mb-2 w-full">
         <div class="bg-gray-700 text-white p-3 rounded-lg max-w-full w-full">
@@ -1155,47 +1153,50 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
       </div>
     `);
 
-    // ─────────────────────────────────────────────────────────────────
-    // ADDED CODE: Create Monaco code editors for each code block
-    // ─────────────────────────────────────────────────────────────────
+    // For each code block, create a Diff Editor inline
     if (Array.isArray(parsedResponse.code_blocks)) {
-      parsedResponse.code_blocks.forEach((block, index) => {
-        // Outer container
+      parsedResponse.code_blocks.forEach((block) => {
         const codeBlockContainer = $(`
           <div class="mt-3 bg-gray-800 p-2 rounded-md">
             <div class="text-sm text-gray-300 mb-1">
-              <strong>${block.language || "Code"} Example:</strong>
+              <strong>${block.language || "Code"} Diff:</strong>
             </div>
-            <!-- Editor will be created here: -->
             <div class="code-block-content" style="height: 300px;"></div>
           </div>
         `);
 
         aiMessage.find(".explanation").append(codeBlockContainer);
 
-        // We’ll map the AI language string to a Monaco language alias
+        // Convert from AI’s language to Monaco’s known language ID
         const monacoLanguage = getEditorLanguageMode(block.language);
 
-        // Create the editor model
-        const model = monaco.editor.createModel(block.content, monacoLanguage);
+        // Create models
+        const originalModel = monaco.editor.createModel(
+          userOriginalCode,
+          monacoLanguage
+        );
+        const modifiedModel = monaco.editor.createModel(
+          block.content,
+          monacoLanguage
+        );
 
-        // Create a standalone editor in the .code-block-content div
-        // The actual DOM node is the last child of codeBlockContainer
-        const editorContainer = codeBlockContainer.find(
-          ".code-block-content"
-        )[0];
-        monaco.editor.create(editorContainer, {
-          model: model,
-          readOnly: false, // or true, depending on your needs
+        // Create a Diff Editor in “inline” mode
+        const diffContainer = codeBlockContainer.find(".code-block-content")[0];
+        const diffEditor = monaco.editor.createDiffEditor(diffContainer, {
+          renderSideBySide: false, // <— inline diffs
+          readOnly: false,
           automaticLayout: true,
           minimap: { enabled: false },
           theme: "vs-dark",
         });
+
+        diffEditor.setModel({
+          original: originalModel,
+          modified: modifiedModel,
+        });
       });
     }
-    // ─────────────────────────────────────────────────────────────────
 
-    // Append final AI message to chat, scroll down
     chatMessages.append(aiMessage);
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
