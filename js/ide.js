@@ -1024,7 +1024,7 @@ async function sendMessageToAI() {
     const userMessage = chatInput.val().trim();
     if (!userMessage) return;
 
-    // Get context values
+    // Context: source code, stdin, stdout, etc.
     const sourceCode =
       sourceEditor.getValue().trim() || "No source code provided.";
     const stdin =
@@ -1034,17 +1034,26 @@ async function sendMessageToAI() {
     const selectedLanguage =
       $("#select-language").find(":selected").text() || "Unknown";
 
-    // Your exact system message
     const systemMessage = `
 You are an expert programming assistant with access to the following context.
 
 Context:
-- **Source Code:**\n\`\`\`\n${sourceCode}\n\`\`\`
-- **Standard Input (stdin):**\n\`\`\`\n${stdin}\n\`\`\`
-- **Standard Output (stdout):**\n\`\`\`\n${stdout}\n\`\`\`
+- **Source Code:**
+\`\`\`
+${sourceCode}
+\`\`\`
+- **Standard Input (stdin):**
+\`\`\`
+${stdin}
+\`\`\`
+- **Standard Output (stdout):**
+\`\`\`
+${stdout}
+\`\`\`
 - **Programming Language:** ${selectedLanguage}
 
-Provide a step-by-step, concise, clear answer to the user's question and relevant code when necessary`;
+Provide a step-by-step, concise, clear answer to the user's question and relevant code when necessary
+    `;
 
     // Add user message to chat
     chatMessages.append(`
@@ -1056,7 +1065,6 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
     `);
     chatInput.val("");
 
-    // Your exact request body structure
     const requestBody = {
       model: "google/gemini-flash-1.5",
       messages: [
@@ -1081,7 +1089,10 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
                       type: "string",
                       description: "Programming language",
                     },
-                    content: { type: "string", description: "Code snippet" },
+                    content: {
+                      type: "string",
+                      description: "Code snippet",
+                    },
                   },
                   required: ["language", "content"],
                 },
@@ -1093,8 +1104,6 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
         },
       },
     };
-
-    console.log("Sending request body:", JSON.stringify(requestBody, null, 2));
 
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
@@ -1111,8 +1120,6 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
     );
 
     const responseData = await response.json();
-    console.log("Raw API response:", responseData);
-
     if (!response.ok) {
       throw new Error(
         responseData.error?.message || `HTTP error! status: ${response.status}`
@@ -1120,52 +1127,75 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
     }
 
     const aiReply = responseData.choices[0].message.content;
-    console.log("AI Reply:", aiReply);
-
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(aiReply);
-      console.log("Parsed JSON Response:", parsedResponse);
     } catch (e) {
       throw new Error(
         `Failed to parse JSON response: ${e.message}\nResponse: ${aiReply}`
       );
     }
 
-    // Format explanation with HTML
-    const explanation = parsedResponse.explanation
+    // Build the AI message container
+    const explanationHtml = parsedResponse.explanation
       .replace(/\n/g, "<br>")
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>");
 
-    // Build AI message
     const aiMessage = $(`
-      <div class="flex justify-start mb-2">
-        <div class="bg-gray-700 text-white p-3 rounded-lg max-w-md w-full">
-          <div class="text-blue-400 font-bold mb-2"> <strong>AI Assistant:</strong></div>
-          <div class="explanation">${explanation}</div>
+      <div class="flex justify-start mb-2 w-full">
+        <div class="bg-gray-700 text-white p-3 rounded-lg max-w-full w-full">
+          <div class="text-blue-400 font-bold mb-2">
+            <strong>AI Assistant:</strong>
+          </div>
+          <div class="explanation">
+            ${explanationHtml}
+          </div>
         </div>
       </div>
     `);
 
-    // Add code blocks if present
-    if (parsedResponse.code_blocks?.length) {
+    // ─────────────────────────────────────────────────────────────────
+    // ADDED CODE: Create Monaco code editors for each code block
+    // ─────────────────────────────────────────────────────────────────
+    if (Array.isArray(parsedResponse.code_blocks)) {
       parsedResponse.code_blocks.forEach((block, index) => {
-        aiMessage.find(".explanation").append(`
-          <div class="mt-3">
-            <div class="text-sm text-gray-300">${
-              block.language || "Code"
-            } Example:</div>
-            <div class="bg-gray-800 p-2 rounded-md mt-1">
-              <pre class="whitespace-pre-wrap break-words">${
-                block.content
-              }</pre>
+        // Outer container
+        const codeBlockContainer = $(`
+          <div class="mt-3 bg-gray-800 p-2 rounded-md">
+            <div class="text-sm text-gray-300 mb-1">
+              <strong>${block.language || "Code"} Example:</strong>
             </div>
+            <!-- Editor will be created here: -->
+            <div class="code-block-content" style="height: 300px;"></div>
           </div>
         `);
+
+        aiMessage.find(".explanation").append(codeBlockContainer);
+
+        // We’ll map the AI language string to a Monaco language alias
+        const monacoLanguage = getEditorLanguageMode(block.language);
+
+        // Create the editor model
+        const model = monaco.editor.createModel(block.content, monacoLanguage);
+
+        // Create a standalone editor in the .code-block-content div
+        // The actual DOM node is the last child of codeBlockContainer
+        const editorContainer = codeBlockContainer.find(
+          ".code-block-content"
+        )[0];
+        monaco.editor.create(editorContainer, {
+          model: model,
+          readOnly: false, // or true, depending on your needs
+          automaticLayout: true,
+          minimap: { enabled: false },
+          theme: "vs-dark",
+        });
       });
     }
+    // ─────────────────────────────────────────────────────────────────
 
+    // Append final AI message to chat, scroll down
     chatMessages.append(aiMessage);
     chatMessages.scrollTop(chatMessages[0].scrollHeight);
   } catch (error) {
