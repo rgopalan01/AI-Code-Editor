@@ -670,6 +670,7 @@ $(document).ready(async function () {
       let settingsButton = $(
         '<button id="toggle-api-settings" class="self-end text-gray-400 hover:text-white text-sm p-2">⚙️ Settings</button>'
       );
+      // Notice type="password" so the field masks input
       let apiSettings = $(
         '<div id="api-settings" class="hidden flex flex-col space-y-2 p-2 bg-gray-800 rounded-lg"></div>'
       );
@@ -677,14 +678,20 @@ $(document).ready(async function () {
         '<label for="api-key-input" class="text-xs text-gray-400">OpenRouter API Key:</label>'
       );
       let apiInput = $(
-        '<input id="api-key-input" type="text" placeholder="sk-..." class="p-2 bg-gray-700 text-white border border-gray-600 rounded-lg w-full text-sm" />'
+        '<input id="api-key-input" type="password" placeholder="sk-..." class="p-2 bg-gray-700 text-white border border-gray-600 rounded-lg w-full text-sm" />'
       );
       let saveButton = $(
         '<button id="save-api-key-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xs">Save API Key</button>'
       );
       let statusMessage = $(
-        '<p id="api-key-status" class="text-xs text-green-400 hidden">✅ API Key Saved!</p>'
+        '<p id="api-key-status" class="text-xs text-green-400 hidden"></p>'
       );
+
+      // If you want a note that a key is already set:
+      let existingKeyMsg = $(
+        '<p id="existing-key-msg" class="text-xs text-yellow-400 hidden">A key is already saved.</p>'
+      );
+
       let chatMessages = $(
         '<div id="ai-chat-messages" class="flex flex-col flex-grow space-y-2 p-4 overflow-y-auto"></div>'
       );
@@ -698,10 +705,16 @@ $(document).ready(async function () {
         '<button id="ai-send-btn" class="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Send</button>'
       );
 
-      // Append API settings elements
-      apiSettings.append(apiLabel, apiInput, saveButton, statusMessage);
+      // Assemble the API settings UI
+      apiSettings.append(
+        apiLabel,
+        apiInput,
+        saveButton,
+        statusMessage,
+        existingKeyMsg
+      );
 
-      // Append elements to chat UI
+      // Chat interface
       chatContainer.append(
         settingsButton,
         apiSettings,
@@ -717,20 +730,24 @@ $(document).ready(async function () {
       // Load saved API key from local storage
       let storedApiKey = localStorage.getItem("openrouter_api_key");
       if (storedApiKey) {
-        apiInput.val(storedApiKey);
+        // We won't set apiInput.val(...) so it remains blank
+        // Instead, show a note that a key is already saved
+        existingKeyMsg.removeClass("hidden").text("A key is already saved.");
       }
 
-      // Save API key when button is clicked
+      // Save button
       saveButton.click(function () {
-        let apiKey = apiInput.val().trim();
-        if (apiKey) {
-          localStorage.setItem("openrouter_api_key", apiKey);
+        let newKey = apiInput.val().trim();
+        if (newKey) {
+          // If user typed anything in the password field, store it
+          localStorage.setItem("openrouter_api_key", newKey);
           statusMessage.removeClass("hidden").text("✅ API Key Saved!");
+          existingKeyMsg.addClass("hidden"); // hide the older "already saved" notice if any
           setTimeout(() => statusMessage.addClass("hidden"), 2000);
         }
       });
 
-      // Send button functionality
+      // Send button
       sendButton.click(() => sendMessageToAI());
       chatInput.keypress((event) => {
         if (event.which === 13) {
@@ -1051,7 +1068,7 @@ ${stdout}
 \`\`\`
 - **Programming Language:** ${selectedLanguage}
 
-Provide a step-by-step, concise, clear answer to the user's question and relevant code when necessary
+Provide a step-by-step, concise, clear answer to the user's question and the relevant, complete, new code if necessary.  
     `;
 
     // Display user's message in UI
@@ -1063,6 +1080,16 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
       </div>
     `);
     chatInput.val("");
+
+    const thinkingBubble = $(`
+      <div id="ai-thinking-bubble" class="flex justify-start mb-2">
+        <div class="bg-gray-700 text-white p-3 rounded-lg max-w-md">
+          <span class="animate-pulse">Thinking…</span>
+        </div>
+      </div>
+    `);
+    chatMessages.append(thinkingBubble);
+    chatMessages.scrollTop(chatMessages[0].scrollHeight);
 
     // Build request
     const requestBody = {
@@ -1115,6 +1142,7 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
     );
 
     const responseData = await response.json();
+
     if (!response.ok) {
       throw new Error(
         responseData.error?.message || `HTTP error! status: ${response.status}`
@@ -1130,6 +1158,7 @@ Provide a step-by-step, concise, clear answer to the user's question and relevan
         `Failed to parse JSON response: ${e.message}\nResponse: ${aiReply}`
       );
     }
+    thinkingBubble.remove();
 
     // Format the explanation text
     const explanationHtml = parsedResponse.explanation
